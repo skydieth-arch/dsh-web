@@ -306,6 +306,35 @@ describe('the bridge connector forwards what the phone dialed', () => {
     expect(host.received[0].headers['accept-encoding']).toBe('identity')
   })
 
+  it('operator keeps the dialed scheme so a bridged redirect stays https', async () => {
+    // Given a phone that reached the object over TLS (the edge stamps the
+    //       scheme it terminated)
+    // When the object relays that request to the host
+    // Then the stamp survives the hop: the host rebuilds redirects and cookies
+    // from it, and dropping it answers the pairing flow with an http://
+    // redirect and a cookie a browser silently discards
+    const bridge = await startBridgeStandIn()
+    const host = await startHostStandIn()
+    cleanups.push(() => bridge.close(), () => host.close())
+    const attaching = bridge.nextAttach()
+    startConnector(bridge, host)
+    await attaching
+
+    const headSeen = bridge.controls.next((frame) => frame.t === 'res')
+    bridge.send({
+      t: 'req',
+      id: 12,
+      method: 'GET',
+      url: '/pair-accept',
+      host: HOSTNAME,
+      headers: [['host', HOSTNAME], ['x-forwarded-proto', 'https']],
+    })
+    bridge.send({ t: 'end', id: 12 })
+
+    await headSeen
+    expect(host.received[0].headers['x-forwarded-proto']).toBe('https')
+  })
+
   it('operator reconnects with the same long-lived credential and no ticket', async () => {
     // Given a connector that attached once and then lost its socket
     const bridge = await startBridgeStandIn()

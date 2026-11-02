@@ -36,7 +36,15 @@ import type { RelayBridgeStart } from './relay-connector.ts'
 
 /** The upgrade carries the lease secret here, never in the URL. */
 export const BRIDGE_AUTH_HEADER = 'authorization'
-/** Response frames this connector will not forward upstream. */
+/**
+ * Response frames this connector will not forward upstream.
+ *
+ * `x-forwarded-proto` is deliberately absent: the host rebuilds every redirect
+ * and every cookie from the protocol a request dialed, so dropping the edge's
+ * stamp makes a bridged request look like plain HTTP and answers the pairing
+ * flow with an `http://` redirect plus a cookie without `Secure`. The hop owns
+ * the address it forwards to, not the scheme the phone actually dialed.
+ */
 export const BRIDGE_HOP_BY_HOP = new Set([
   'host',
   'connection',
@@ -53,7 +61,6 @@ export const BRIDGE_HOP_BY_HOP = new Set([
   'cf-ray',
   'cf-ipcity',
   'x-forwarded-for',
-  'x-forwarded-proto',
   'x-real-ip',
 ])
 

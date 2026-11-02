@@ -61,6 +61,19 @@ const HTTP_BODY = 1
 const WS_BINARY = 2
 const WS_TEXT = 3
 
+/**
+ * The encoding one bridged request asks the origin for.
+ *
+ * The relay object owns the single compression layer a phone sees: it encodes
+ * what it forwards and stamps the matching `Content-Encoding`. That only holds
+ * if the body it receives is uncompressed, so the connector asks for identity
+ * instead of passing the phone's own `Accept-Encoding` through. Forwarding it
+ * makes the origin answer compressed while the object states the phone's
+ * negotiated encoding over the already-encoded body, and the page arrives as
+ * mojibake (a body of one framing declared as another).
+ */
+export const BRIDGE_UPSTREAM_ENCODING = 'identity'
+
 /** Where a dropped socket restarts: fast first, then patient. */
 export const BRIDGE_RETRY_BASE_MS = 1_000
 export const BRIDGE_RETRY_MAX_MS = 30_000
@@ -100,7 +113,8 @@ export function bridgeUpstreamHost(frameHost: unknown, hostname: string): string
 
 /**
  * The upstream headers of one bridged request: the phone's own, minus the hops
- * this transport owns, with the public `Host` put back explicitly.
+ * this transport owns, with the public `Host` put back explicitly and the body
+ * asked for uncompressed (see {@link BRIDGE_UPSTREAM_ENCODING}).
  */
 export function bridgeUpstreamHeaders(frameHeaders: unknown, host: string): Record<string, string> {
   const headers: Record<string, string> = {}
@@ -109,6 +123,7 @@ export function bridgeUpstreamHeaders(frameHeaders: unknown, host: string): Reco
     headers[name] = value
   }
   headers.host = host
+  headers['accept-encoding'] = BRIDGE_UPSTREAM_ENCODING
   return headers
 }
 

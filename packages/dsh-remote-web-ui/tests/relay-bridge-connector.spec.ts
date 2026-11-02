@@ -273,7 +273,37 @@ describe('the bridge connector forwards what the phone dialed', () => {
     expect(bridgeUpstreamHeaders([['host', '127.0.0.1:55220'], ['accept', 'text/html']], HOSTNAME)).toEqual({
       accept: 'text/html',
       host: HOSTNAME,
+      'accept-encoding': 'identity',
     })
+  })
+
+  it('operator gets an uncompressed body so the object owns the only encoding layer', async () => {
+    // Given a phone that advertises every encoding the object could negotiate
+    // When the object relays that request to the host
+    // Then the upstream asked for identity anyway: the object encodes what the
+    // phone receives, and an already-compressed upstream body would be encoded
+    // a second time while the stated Content-Encoding names the first one --
+    // the pairing page then arrives as mojibake
+    const bridge = await startBridgeStandIn()
+    const host = await startHostStandIn()
+    cleanups.push(() => bridge.close(), () => host.close())
+    const attaching = bridge.nextAttach()
+    startConnector(bridge, host)
+    await attaching
+
+    const headSeen = bridge.controls.next((frame) => frame.t === 'res')
+    bridge.send({
+      t: 'req',
+      id: 11,
+      method: 'GET',
+      url: '/',
+      host: HOSTNAME,
+      headers: [['host', HOSTNAME], ['accept-encoding', 'gzip, deflate, br, zstd']],
+    })
+    bridge.send({ t: 'end', id: 11 })
+
+    await headSeen
+    expect(host.received[0].headers['accept-encoding']).toBe('identity')
   })
 
   it('operator reconnects with the same long-lived credential and no ticket', async () => {
